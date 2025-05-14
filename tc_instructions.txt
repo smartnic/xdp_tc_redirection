@@ -1,5 +1,7 @@
 Hello, here are the instructions to run tc_redirect.c and the results you should see:
 
+This is a manual test if you want to try running the commands yourself. If you want to automatically test please run the executable bash script ./tc_test.sh
+
 TO GO TO CLEAN SLATE, PLEASE RUN THESE COMMANDS:
 sudo ip netns exec test-ns tc qdisc del dev veth1 clsact 2>/dev/null || true
 sudo tc qdisc del dev veth0 clsact                         2>/dev/null || true
