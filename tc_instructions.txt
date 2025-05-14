@@ -22,7 +22,7 @@ In terminal 1:
   sudo ip netns add test-ns #or any name that you wish
   sudo ip link add veth0 type veth peer name veth1
   sudo ip link set veth1 netns test-ns
-5. Configure IPs for our veth interfaces adn set them up
+5. Configure IPs for our veth interfaces and set them up
   sudo ip addr add 192.168.1.1/24 dev veth0
   sudo ip link set veth0 up
   sudo ip netns exec test-ns ip link set lo up 
@@ -30,10 +30,10 @@ In terminal 1:
   sudo ip netns exec test-ns ip link set veth1 up
 6. Store the interface index of veth0 as an environment variable (we'll need it later)
   export VETH0_IFINDEX=$(ip -o link show dev veth0 | awk '{print $1}' | tr -d ':')  #grabs the interface index of veth0 from the list; if you want to double check this, type ip link show dev veth0.
-7. Attach the tc hook
-  sudo tc qdisc replace dev veth0 clsact
-  sudo tc filter replace dev veth0 ingress bpf da \
-       obj tc_redirect.o sec tc
+7. Attach the tc hook to the veth1 interface (inside test-ns)
+  sudo ip netns exec test-ns tc qdisc replace dev veth1 clsact  
+  sudo ip netns exec test-ns tc filter replace dev veth1 \
+       ingress bpf da obj tc_redirect.o sec tc
 8. Update the pinned bpf map using VETH0_IFINDEX #we use this map so our XDP program can see what interface it's redirecting packets to.
   #My bpftool was only accepting hex values (00 00 00 00), yours may accept integers. How many bytes are taken in as a key is determinant on how you set up your bpf map in the program; in tc_redirect.c, it's 4 bytes to 4 bytes as the key/value pairs.
   sudo mkdir -p /sys/fs/bpf #mount bpf filesystem to store if_index
