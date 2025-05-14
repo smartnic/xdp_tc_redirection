@@ -1,6 +1,17 @@
 Hello, here are the instructions to run tc_redirect.c and the results you should see:
 
-To run tc_redirect.c:
+TO GO TO CLEAN SLATE, PLEASE RUN THESE COMMANDS:
+sudo ip netns exec test-ns tc qdisc del dev veth1 clsact 2>/dev/null || true
+sudo tc qdisc del dev veth0 clsact                         2>/dev/null || true
+sudo tc qdisc del dev veth0 root                           2>/dev/null || true
+sudo ip netns del test-ns                                  2>/dev/null || true
+sudo ip link del veth0                                     2>/dev/null || true
+sudo rm -f /sys/fs/bpf/out_ifindex                         2>/dev/null || true
+sudo umount /sys/fs/bpf         2>/dev/null || true
+
+
+
+To run & test tc_redirect.c:
 
 1. Run ./check-ebpf-deps.sh to make sure that you have all the dependencies available.
 2. Compile the program: clang -O2 -g -target bpf -I/usr/include/x86_64-linux-gnu -c tc_redirect.c -o tc_redirect.o     (I had to use the flag -I/usr/include/x86_64-linux-gnu to include the correct headers, you may not).
@@ -21,6 +32,8 @@ In terminal 1:
   export VETH0_IFINDEX=$(ip -o link show dev veth0 | awk '{print $1}' | tr -d ':')  #grabs the interface index of veth0 from the list; if you want to double check this, type ip link show dev veth0.
 7. Update the pinned bpf map using VETH0_IFINDEX #we use this map so our XDP program can see what interface it's redirecting packets to.
   #My bpftool was only accepting hex values (00 00 00 00), yours may accept integers. How many bytes are taken in as a key is determinant on how you set up your bpf map in the program; in tc_redirect.c, it's 4 bytes to 4 bytes as the key/value pairs.
+  sudo mkdir -p /sys/fs/bpf #mount bpf filesystem to store if_index
+  mount | grep bpf || sudo mount -t bpf bpf /sys/fs/bpf
   sudo bpftool map update pinned /sys/fs/bpf/tc/globals/out_ifindex \
       key hex 00 00 00 00 \
       value hex $(printf "%02x 00 00 00" $VETH0_IFINDEX)
