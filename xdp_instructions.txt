@@ -2,6 +2,13 @@ Hello, here are the instructions to run the test with XDP and TC monitoring (fil
 
 First off, open 2 terminals - we'll need them to run the test.
 
+IF YOU WANT TO GO TO A CLEAN SLATE (AFTER TESTING) RUN THESE COMMANDS:
+  sudo ip link set dev veth0 xdp off 2>/dev/null || true
+  sudo ip link del veth0           2>/dev/null || true
+  sudo ip link del veth1           2>/dev/null || true
+  sudo ip netns del test-ns        2>/dev/null || true
+  sudo umount /sys/fs/bpf         2>/dev/null || true
+
 In Terminal 1:
 1. Compile both programs:
   #xdp dispatcher
