@@ -1,0 +1,60 @@
+Hello, here are the instructions to run the test with XDP and TC monitoring (files xdp_dispatcher.c and tc_monitor.c):
+
+First off, open 2 terminals - we'll need them to run the test.
+
+In Terminal 1:
+1. Compile both programs:
+  #xdp dispatcher
+  clang -O2 -g -target bpf -I/usr/include/$(uname -m)-linux-gnu -c xdp_dispatcher.c -o xdp_dispatcher.o
+  #tc monitor
+  clang -O2 -g -target bpf -I/usr/include/$(uname -m)-linux-gnu -c tc_monitor.c -o tc_monitor.o
+2. Mount bpf file system if necessary:
+  sudo mkdir -p /sys/fs/bpf
+  sudo mount -t bpf bpf /sys/fs/bpf
+3. Set up veth interfaces & netns namespaces:
+  sudo ip netns add test-ns
+  sudo ip link add veth0 type veth peer name veth1
+  sudo ip link set veth1 netns test-ns
+  
+  sudo ip addr add 192.168.1.1/24 dev veth0
+  sudo ip link set veth0 up
+  
+  sudo ip netns exec test-ns ip addr add 192.168.1.2/24 dev veth1
+  sudo ip netns exec test-ns ip link set veth1 up
+  sudo ip netns exec test-ns ip link set lo up
+3. Attach xdp_dispatcher to veth0
+  sudo ip link set dev veth0 xdp obj xdp_dispatcher.o sec xdp
+4. Get the cpumap index and store it in environment variable MAP_ID:
+  export MAP_ID=$(sudo bpftool map show \
+    | grep 'cpumap.*cpu_map' \
+    | tail -1 | cut -d: -f1)
+  #you can doublecheck this by running sudo bpftool map show and checking the entry with cpumap, then run echo $MAP_ID and compare the two. If they are equal, the command worked. If not, manually set $MAP_ID to the correct value.
+5. Pin & Populate the cpumap; we map key 1 -> cpu 1 for now.
+  sudo bpftool map pin id $MAP_ID /sys/fs/bpf/cpu_map #pins the index of our cpumap to some permanent storage, so that it may be accessed later.
+  sudo bpftool map update id $MAP_ID \
+  key   hex 01 00 00 00 \
+  value hex 01 00 00 00 00 00 00 00
+6. Attach tc monitor inside the namespace we created in step 3:
+   sudo ip netns exec test-ns bash -c '
+    # remove any existing qdisc
+    tc qdisc del dev veth1 clsact 2>/dev/null || true
+    # add clsact and attach our BPF filter
+    tc qdisc add dev veth1 clsact
+    tc filter add dev veth1 ingress prio 1 bpf \
+       obj /home/vab85/Downloads/xdp_stuff/tc_monitor.o \
+       sec classifier direct-action
+  '
+7. Finally, tail the kernel trace pipe and leave it running - this will allow us to see what CPU is processing what packet. Initially, you should see nothing printed out (ignore the I/O error from the echo)
+  sudo sh -c 'echo > /sys/kernel/debuf/tracing/trace_pipe'
+  sudo cat /sys/kernel/debug/tracing/trace_pipe
+
+In the second terminal:
+8. Run a ping from src veth1 to dest veth0 using its IP address:  
+  sudo ip netns exec test-ns ping -I veth1 -c 5 192.168.1.1
+9. Now observe the first terminal's tracepipe output, you should see something like this:
+  cpumap/1/map:5-3856    [001] ..s2.  1971.681434: bpf_trace_printk: TC MONITOR: cpu=1 len=98
+  cpumap/1/map:5-3856    [001] ..s2.  1972.686275: bpf_trace_printk: TC MONITOR: cpu=1 len=98
+  cpumap/1/map:5-3856    [001] ..s2.  1973.710211: bpf_trace_printk: TC MONITOR: cpu=1 len=98
+  cpumap/1/map:5-3856    [001] ..s2.  1974.734079: bpf_trace_printk: TC MONITOR: cpu=1 len=98
+  cpumap/1/map:5-3856    [001] ..s2.  1975.758083: bpf_trace_printk: TC MONITOR: cpu=1 len=98
+#With tc monitor showing us that the packet is being processed by CPU 1 and that its length is 98 bytes long (the expected length for an ICMP packet: 8 bytes ICMP + 20 bytes IPv4 + 14 bytes ethernet  + 56 bytes from the ping payload)
