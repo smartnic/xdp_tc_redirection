@@ -30,16 +30,21 @@ In terminal 1:
   sudo ip netns exec test-ns link set veth1 up
 6. Store the interface index of veth0 as an environment variable (we'll need it later)
   export VETH0_IFINDEX=$(ip -o link show dev veth0 | awk '{print $1}' | tr -d ':')  #grabs the interface index of veth0 from the list; if you want to double check this, type ip link show dev veth0.
-7. Update the pinned bpf map using VETH0_IFINDEX #we use this map so our XDP program can see what interface it's redirecting packets to.
+7. Attach the tc hook
+  sudo tc qdisc replace dev veth0 clsact
+  sudo tc filter replace dev veth0 ingress bpf da \
+       obj tc_redirect.o sec tc
+8. Update the pinned bpf map using VETH0_IFINDEX #we use this map so our XDP program can see what interface it's redirecting packets to.
   #My bpftool was only accepting hex values (00 00 00 00), yours may accept integers. How many bytes are taken in as a key is determinant on how you set up your bpf map in the program; in tc_redirect.c, it's 4 bytes to 4 bytes as the key/value pairs.
   sudo mkdir -p /sys/fs/bpf #mount bpf filesystem to store if_index
-  mount | grep bpf || sudo mount -t bpf bpf /sys/fs/bpf
-  sudo bpftool map update pinned /sys/fs/bpf/tc/globals/out_ifindex \
+  sudo mount -t bpf bpf /sys/fs/bpf
+  map_id=$(sudo bpftool map show \
+         | awk '/out_ifindex/ { print $1 }' \
+         | tr -d ':' )
+  sudo bpftool map pin id $map_id /sys/fs/bpf/out_ifindex
+  sudo bpftool map update pinned /sys/fs/bpf/out_ifindex \
       key hex 00 00 00 00 \
       value hex $(printf "%02x 00 00 00" $VETH0_IFINDEX)
-8. Attach the tc hook to the veth1 interface (inside test-ns)
-  sudo ip netns exec test-ns tc qdisc add dev veth1 clsact
-  sudo ip netns exec test-ns tc filter add dev veth1 ingress bpf da obj redirect_if.o sec tc
 9. Finally, run tcpdump inside the terminal on veth0 to observe incoming traffic. 
   sudo tcpdump -i veth0 -n icmp #you should see a message: "Listening on veth0, link type EN10MB(Ethernet)..." 
 
