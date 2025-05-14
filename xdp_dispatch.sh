@@ -63,4 +63,4 @@ echo "→ Now in this terminal you’ll see TC MONITOR prints."
 echo "→ In a 2nd terminal, run:"
 echo "     sudo ip netns exec test-ns ping -I veth1 -c 5 192.168.1.1"
 echo
-sudo cat /sys/kernel/debug/tracing/trace_pipe
+sudo grep --line-buffered 'cpumap/1/map' /sys/kernel/debug/tracing/trace_pipe
