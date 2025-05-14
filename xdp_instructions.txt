@@ -1,5 +1,8 @@
 Hello, here are the instructions to run the test with XDP and TC monitoring (files xdp_dispatcher.c and tc_monitor.c):
 
+
+This is a manual test if you want to try running the commands yourself. If you want to automatically test please run the executable bash script ./xdp_dispatch.sh
+
 First off, open 2 terminals - we'll need them to run the test.
 
 IF YOU WANT TO GO TO A CLEAN SLATE (AFTER TESTING) RUN THESE COMMANDS:
