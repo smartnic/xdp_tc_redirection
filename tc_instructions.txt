@@ -27,7 +27,7 @@ In terminal 1:
   sudo ip link set veth0 up
   sudo ip netns exec test-ns ip link set lo up 
   sudo ip netns exec test-ns ip addr add 192.168.1.2/24 dev veth1
-  sudo ip netns exec test-ns link set veth1 up
+  sudo ip netns exec test-ns ip link set veth1 up
 6. Store the interface index of veth0 as an environment variable (we'll need it later)
   export VETH0_IFINDEX=$(ip -o link show dev veth0 | awk '{print $1}' | tr -d ':')  #grabs the interface index of veth0 from the list; if you want to double check this, type ip link show dev veth0.
 7. Attach the tc hook
