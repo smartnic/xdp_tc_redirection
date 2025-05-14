@@ -1,0 +1,45 @@
+Hello, here are the instructions to run tc_redirect.c and the results you should see:
+
+To run tc_redirect.c:
+
+1. Run ./check-ebpf-deps.sh to make sure that you have all the dependencies available.
+2. Compile the program: clang -O2 -g -target bpf -I/usr/include/x86_64-linux-gnu -c tc_redirect.c -o tc_redirect.o     (I had to use the flag -I/usr/include/x86_64-linux-gnu to include the correct headers, you may not).
+3. Now we begin setting up the program in our terminals. To prepare for this, open up 3 terminals on your system.
+
+In terminal 1: 
+4. Set up veth interfaces:
+  sudo ip netns add test-ns #or any name that you wish
+  sudo ip link add veth0 type veth peer name veth1
+  sudo ip link set veth1 netns test-ns
+5. Configure IPs for our veth interfaces adn set them up
+  sudo ip addr add 192.168.1.1/24 dev veth0
+  sudo ip link set veth0 up
+  sudo ip netns exec test-ns ip link set lo up 
+  sudo ip netns exec test-ns ip addr add 192.168.1.2/24 dev veth1
+  sudo ip netns exec test-ns link set veth1 up
+6. Store the interface index of veth0 as an environment variable (we'll need it later)
+  export VETH0_IFINDEX=$(ip -o link show dev veth0 | awk '{print $1}' | tr -d ':')  #grabs the interface index of veth0 from the list; if you want to double check this, type ip link show dev veth0.
+7. Update the pinned bpf map using VETH0_IFINDEX #we use this map so our XDP program can see what interface it's redirecting packets to.
+  #My bpftool was only accepting hex values (00 00 00 00), yours may accept integers. How many bytes are taken in as a key is determinant on how you set up your bpf map in the program; in tc_redirect.c, it's 4 bytes to 4 bytes as the key/value pairs.
+  sudo bpftool map update pinned /sys/fs/bpf/tc/globals/out_ifindex \
+      key hex 00 00 00 00 \
+      value hex $(printf "%02x 00 00 00" $VETH0_IFINDEX)
+8. Attach the tc hook to the veth1 interface (inside test-ns)
+  sudo ip netns exec test-ns tc qdisc add dev veth1 clsact
+  sudo ip netns exec test-ns tc filter add dev veth1 ingress bpf da obj redirect_if.o sec tc
+9. Finally, run tcpdump inside the terminal on veth0 to observe incoming traffic. 
+  sudo tcpdump -i veth0 -n icmp #you should see a message: "Listening on veth0, link type EN10MB(Ethernet)..." 
+
+In terminal 2:
+10. Assuming you've done the previous steps to set up our veth interfaces in terminal 1, start a tcpdump but this time on veth1's interface:
+  sudo ip netns exec test-ns tcpdump -i veth1 -n icmp #you should see a message: "Listening on veth1, link-type EN10MB".
+
+In terminal 3:
+11. Now that we have tcpdumped on both veth1 and veth0, let's try sending some packets from veth0 (source) to veth1 (destination) using the ping command. Since our tc hook has been applied to veth1, it should redirect the packets back to veth0!
+  ping -I veth0 192.168.1.2 -c 5 #sends 5 packets from source veth0 to veth1's IP address.
+
+Results:
+- You should see ICMP echo request packets on the terminal with veth0's tcpdump interface. On the terminal running veth1's tcpdump, you should see nothing - the packets have been redirected to terminal 1 by the tc program!
+
+
+
