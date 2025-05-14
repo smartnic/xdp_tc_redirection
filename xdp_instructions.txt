@@ -9,6 +9,8 @@ IF YOU WANT TO GO TO A CLEAN SLATE (AFTER TESTING) RUN THESE COMMANDS:
   sudo ip netns del test-ns        2>/dev/null || true
   sudo umount /sys/fs/bpf         2>/dev/null || true
 
+0. Run ./check_ebpf-deps.sh to check if you have all the dependencies installed.
+
 In Terminal 1:
 1. Compile both programs:
   #xdp dispatcher
