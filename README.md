@@ -1,4 +1,4 @@
 # xdp_tc_redirection
 Packet redirection using tc/XDP
 
-#Instructions & Report to be Added.
+#Refer to tc_instructions.txt and xdp_instructions.txt for info on how to run the programs.
